@@ -4,26 +4,33 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 is_generic_title () {
-  # alles kleinschreiben und prüfen
-  local t="$(echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/^ *//; s/ *$//')"
+  local t
+  # klein + trim + umlaute belassen
+  t="$(echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
   case "$t" in
-    "zusammenfassung"|"kurzfassung"|"summaries"|"zusammenfassung des vortrags"|"kurzfassung des vortrags"|"summary"|"abstract")
+    "zusammenfassung"|"kurzfassung"|"summary"|"abstract"|"summaries"|"zusammenfassung des vortrags"|"kurzfassung des vortrags")
       return 0 ;;
   esac
-  # sehr kurze Titel ebenfalls als generisch werten
+  # sehr kurz → generisch
   [ ${#t} -lt 8 ] && return 0
   return 1
 }
 
 prettify_name () {
-  # Bindestriche -> Leerzeichen; doppelte Leerzeichen entfernen
-  echo "$1" | sed 's/-/ /g; s/  \+/ /g'
+  # Bindestriche/Unterstriche → Leerzeichen; doppelte Leerzeichen entfernen
+  echo "$1" | sed 's/[-_]/ /g; s/  \+/ /g'
 }
 
 first_markdown_heading () {
-  # erste Markdown-Überschrift extrahieren (egal ob #, ##, ###)
+  # 1) BOM entfernen, 2) erste MD-Heading-Zeile (#..######) extrahieren, 3) # + Spaces strippen
   local file="$1"
-  grep -m1 -E '^[[:space:]]*#{1,6}[[:space:]]+' "$file" 2>/dev/null | sed 's/^[[:space:]]*#\{1,6\}[[:space:]]\+//' || true
+  awk '
+    NR==1 { sub(/^\xef\xbb\xbf/,"") }           # BOM weg
+    /^[[:space:]]*#{1,6}[[:space:]]+/ {
+      gsub(/^[[:space:]]*#+[[:space:]]+/,"",$0) # führende ### + Spaces
+      print; exit
+    }
+  ' "$file" 2>/dev/null || true
 }
 
 generate_index () {
@@ -37,8 +44,9 @@ generate_index () {
   {
     echo "# $header"
     echo
-
     local count=0
+
+    # alphabetisch, robust gegen Leerzeichen
     while IFS= read -r -d '' file; do
       local rel="${file#$repo_root/$dir/}"
       local base="$(basename "$rel")"
@@ -47,7 +55,7 @@ generate_index () {
       local link_text=""
       if [[ "$ext" == "md" ]]; then
         local h="$(first_markdown_heading "$file")"
-        if is_generic_title "$h"; then
+        if is_generic_title "${h:-}"; then
           link_text="$(prettify_name "$name_noext")"
         else
           link_text="$h"
