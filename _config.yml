@@ -1,3 +1,11 @@
 title: Veranstaltungsdoku
 description: Dokumentation der Veranstaltung
 theme: jekyll-theme-cayman
+
+nav:
+  - title: Home
+    url: /
+  - title: Summaries
+    url: /summaries/
+  - title: Transcripts
+    url: /transcripts/
